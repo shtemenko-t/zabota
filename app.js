@@ -105,7 +105,7 @@ function ensureWeek() {
   const k = mondayKey();
   if (!S.week || S.week.key !== k) {
     const prev = S.week && S.week.taskId;
-    S.week = { key: k, taskId: pick(true, prev), redraws: 1, status: 'open', r: { a: 0, g: 0, j: 0 }, saved: false };
+    S.week = { key: k, since: todayKey(), taskId: pick(true, prev), redraws: 1, status: 'open', r: { a: 0, g: 0, j: 0 }, saved: false };
     save();
   }
 }
@@ -122,7 +122,7 @@ function render() {
   const tabs = $('#tabs');
   if (!S.onboarded) { tabs.hidden = true; app.className = 'no-tabs'; app.innerHTML = vOnboarding(); return; }
   const r = route();
-  ensureDay(); ensureWeek();
+  ensureDay(); ensureWeek(); autoComplete();
   const views = { today: vToday, me: vMe, album: vMe, opora: vOpora, month: vMonth, calm: vCalm, deck: vDeck };
   const fn = views[r] || vToday;
   const withTabs = TABS.includes(r) || r === 'album' || !views[r];
@@ -204,8 +204,10 @@ function vToday() {
   h += '</div>';
 
   if (S.day.status === 'open' && S.day.flipped) {
-    h += '<div class="pad" style="padding-top:16px;display:flex;flex-direction:column;gap:8px"><div class="row"><button class="btn btn-rose" data-act="done" data-scope="day">Сделала</button><button class="btn btn-ghost" data-act="redraw" data-scope="day"' + (S.day.redraws ? '' : ' disabled') + '>' + (S.day.redraws ? 'Другую карту' : 'Перетянуто') + '</button></div>' +
-      (t.go ? '<button class="btn btn-ghost" style="min-height:46px;font-size:15px;border-color:var(--night)" data-act="openJar">' + ICON.jar + 'Открыть копилку</button>' : '') +
+    const nb = needBox(S.day, t);
+    h += '<div class="pad" style="padding-top:16px;display:flex;flex-direction:column;gap:8px">' + (nb ? nb + '<div class="row"><button class="btn btn-ghost" data-act="redraw" data-scope="day"' + (S.day.redraws ? '' : ' disabled') + '>' + (S.day.redraws ? 'Другую карту' : 'Перетянуто') + '</button></div>'
+      : '<div class="row"><button class="btn btn-rose" data-act="done" data-scope="day">Сделала</button><button class="btn btn-ghost" data-act="redraw" data-scope="day"' + (S.day.redraws ? '' : ' disabled') + '>' + (S.day.redraws ? 'Другую карту' : 'Перетянуто') + '</button></div>' +
+      (t.go ? '<button class="btn btn-ghost" style="min-height:46px;font-size:15px;border-color:var(--night)" data-act="openJar">' + ICON.jar + 'Открыть копилку</button>' : '')) +
       '<div style="display:flex;justify-content:space-between;align-items:center"><button class="link-btn" data-act="skip">Не сегодня</button><a class="pill-link" href="#calm">' + ICON.wave + 'Тревожно? Успокоиться</a></div></div>';
   }
   if (S.day.status === 'done' && !S.day.saved) h += '<div class="panel">' + ratingPanel('day', S.day.r, t) + '</div>';
@@ -321,12 +323,41 @@ const Fireworks = {
   }
 };
 
+/* tasks with need: { past: N } close themselves once N stones from the past are added */
+function needProgress(o, t) {
+  if (!t || !t.need) return null;
+  const since = o === S.week ? (o.since || o.key) : o.date;
+  const have = S.stones.filter(s => s.kind === 'past' && s.date >= since).length;
+  return { have: Math.min(have, t.need), need: t.need };
+}
+function needBox(o, t) {
+  const pr = needProgress(o, t);
+  if (!pr) return '';
+  const dots = Array.from({ length: pr.need }, (_, i) => '<span class="nd' + (i < pr.have ? ' on' : '') + '"></span>').join('');
+  return '<div class="need"><div class="need-row"><span class="need-dots" aria-hidden="true">' + dots + '</span><b>Добавлено ' + pr.have + ' из ' + pr.need + '</b></div>' +
+    '<div class="small">' + (pr.need > 1 ? 'Каждый камушек из прошлого засчитывается. Когда добавишь ' + pr.need + ', задание закроется само' : 'Когда положишь камушек, задание закроется само') + '</div>' +
+    '<button class="btn btn-night" style="min-height:48px;font-size:15px" data-act="openJar">' + ICON.jar + (pr.have ? 'Добавить ещё камушек' : 'Открыть копилку и добавить') + '</button></div>';
+}
+function autoComplete() {
+  [['day', S.day], ['week', S.week]].forEach(([sc, o]) => {
+    if (!o || o.saved) return;
+    const t = taskById(o.taskId), pr = needProgress(o, t);
+    if (!pr || pr.have < pr.need) return;
+    o.status = 'done'; o.saved = true;
+    S.log.push({ date: todayKey(), id: t.id, c: t.c, l: t.l, wk: sc === 'week', a: 0, g: 0, j: 0 });
+    if (sc === 'day') UI.justSaved = true;
+    save();
+    toast(sc === 'week' ? 'Карта недели выполнена' : 'Карта дня выполнена');
+  });
+}
+
 /* ---------- week sheet ---------- */
 function weekSheet() {
   const w = S.week, t = taskById(w.taskId);
   let h = '<div class="grab"></div>' + cardFront(t, true).replace('class="face front"', 'class="face front static"');
-  if (w.saved) h += '<div class="panel sage" style="margin:0"><h3>Выполнено</h3><p style="color:#2F6B4B">Записано в копилку опоры. В понедельник придёт новая карта недели</p></div><button class="btn btn-ghost" data-act="closeSheet">Закрыть</button>';
+  if (w.saved) h += '<div class="panel sage" style="margin:0"><h3>Выполнено</h3><p style="color:#2F6B4B">' + (t.need ? 'Камушки из прошлого уже в копилке' : 'Записано в копилку опоры') + '. В понедельник придёт новая карта недели</p></div><button class="btn btn-ghost" data-act="closeSheet">Закрыть</button>';
   else if (w.status === 'done') h += '<div class="panel" style="margin:0;padding:0">' + ratingPanel('week', w.r, t) + '</div>';
+  else if (t.need) h += needBox(w, t) + '<div class="row"><button class="btn btn-ghost" data-act="redraw" data-scope="week"' + (w.redraws ? '' : ' disabled') + '>' + (w.redraws ? 'Другую карту' : 'Перетянуто') + '</button></div><button class="link-btn" data-act="closeSheet" style="align-self:center">Закрыть</button>';
   else h += (t.go ? '<button class="btn btn-ghost" style="min-height:46px;font-size:15px;border-color:var(--night)" data-act="openJar">' + ICON.jar + 'Открыть копилку</button>' : '') + '<div class="row"><button class="btn btn-rose" data-act="done" data-scope="week">Сделала</button><button class="btn btn-ghost" data-act="redraw" data-scope="week"' + (w.redraws ? '' : ' disabled') + '>' + (w.redraws ? 'Другую карту' : 'Перетянуто') + '</button></div><button class="link-btn" data-act="closeSheet" style="align-self:center">Закрыть</button>';
   return h;
 }
@@ -535,7 +566,7 @@ const A = {
   redraw: el => {
     const sc = el.dataset.scope, o = sc === 'day' ? S.day : S.week;
     if (!o.redraws) return;
-    o.taskId = pick(sc === 'week', o.taskId); o.redraws--; save();
+    o.taskId = pick(sc === 'week', o.taskId); o.redraws--; if (sc === 'week') o.since = todayKey(); save();
     if (sc === 'week') refreshSheet('week', weekSheet()); else render();
   },
   done: el => {
@@ -602,7 +633,12 @@ const A = {
   savePast: () => {
     const text = $('#pastText').value.trim(); if (!text) { $('#pastText').focus(); return; }
     const when = ($('#periods .chip.on') || {}).dataset.p || 'Из прошлого';
-    S.stones.push({ id: uid(), kind: 'past', text, when, date: todayKey() }); save(); closeSheet(); render(); toast('Камушек в копилке');
+    S.stones.push({ id: uid(), kind: 'past', text, when, date: todayKey() }); save(); closeSheet();
+    const open = [S.day, S.week].find(o => o && !o.saved && needProgress(o, taskById(o.taskId)));
+    const pr = open && needProgress(open, taskById(open.taskId));
+    autoComplete(); render();
+    if (pr && pr.have < pr.need) toast('Камушек в копилке · ' + pr.have + ' из ' + pr.need);
+    else if (!pr) toast('Камушек в копилке');
   },
   stoneItem: el => {
     const s = S.stones.find(x => x.id === el.dataset.id); if (!s) return;
