@@ -108,7 +108,7 @@ function ensureWeek() {
 function weekCount() { const m = mondayKey(); return S.log.filter(l => l.date >= m).length; }
 
 /* ---------- router ---------- */
-const TABS = ['today', 'album', 'opora', 'month'];
+const TABS = ['today', 'album', 'opora', 'calm', 'month'];
 function route() { return (location.hash || '#today').slice(1).split('?')[0] || 'today'; }
 function go(to) { if (location.hash === '#' + to) render(); else location.hash = to; }
 window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
@@ -335,7 +335,7 @@ function vMonth() {
 /* ---------- calm ---------- */
 function vCalm() {
   const pr = [['breath', '4·6', 'Дыхание с длинным выдохом', 'Вдох на 4, выдох на 6. Выдох успокаивает тело', '2 мин', '#DDEFE4', '#1F5139'], ['ground', '5', 'Заземление 5-4-3-2-1', 'Назови, что видишь, слышишь, чувствуешь кожей', '3 мин', '#FDE3D6', '#8A3A1E'], ['heart', '♡', 'Ладонь на сердце', 'Тепло ладони и слова, которые сказала бы подруге', '1 мин', '#E7DEF6', '#4B3A7A']];
-  return '<div class="head"><button class="back" data-act="back">' + ICON.back + 'Назад</button><h1>Успокоиться</h1><div class="sub">Тревога перед непривычным — нормальна. Она значит, что ты делаешь новое, а не что ты в опасности</div></div>' +
+  return '<div class="head"><h1>Успокоиться</h1><div class="sub">Тревога перед непривычным — нормальна. Она значит, что ты делаешь новое, а не что ты в опасности</div></div>' +
     '<div class="panel night" style="margin-top:18px;padding:22px;border-radius:26px;position:relative;overflow:hidden"><div style="position:absolute;right:-40px;top:-40px;width:170px;height:170px;border-radius:50%;background:#3D3168"></div><div style="position:absolute;right:0;top:0;width:90px;height:90px;border-radius:50%;background:#4A3D7A"></div>' +
     '<div style="position:relative;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold)">Сканирование тела · 5 минут</div><div class="h-display" style="position:relative;font-size:20px;line-height:1.3">Расслабься сверху вниз</div><p style="position:relative;color:#E4DDF5">От бровей и щёк до кончиков пальцев ног. Шаг за шагом, в своём темпе</p><button class="btn btn-gold" style="position:relative" data-act="play" data-p="scan">Начать</button></div>' +
     '<div class="label">Ещё практики</div><div class="list">' + pr.map(p => '<button class="entry" style="align-items:center" data-act="play" data-p="' + p[0] + '"><div style="flex:none;width:44px;height:44px;border-radius:14px;background:' + p[5] + ';color:' + p[6] + ';display:flex;align-items:center;justify-content:center;font-family:Unbounded,sans-serif;font-size:13px;font-weight:700">' + p[1] + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">' + p[2] + '</div><div class="small">' + p[3] + '</div></div><div class="small" style="flex:none;font-weight:700">' + p[4] + '</div></button>').join('') + '</div>' +
