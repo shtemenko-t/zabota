@@ -184,3 +184,10 @@ textarea,input[type=text]{width:100%;border:1.5px solid var(--chip-border);borde
 .entry.next .ic{flex:none;width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800}
 .entry .chev{flex:none;font-size:26px;color:var(--muted);line-height:1}
 @media (prefers-reduced-motion:reduce){.celebrate.drop .falling,.celebrate.drop .jar-wrap svg{animation:none}}
+
+/* instruction */
+.ins-card{width:100%;border:0;border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px;text-align:left}
+.ins-t{flex:1;font-size:16px;font-weight:800}
+.ins-n{flex:none;min-width:28px;height:28px;border-radius:999px;background:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;padding:0 8px}
+.ins-prev{display:flex;flex-wrap:wrap;gap:6px}
+.ins-prev span{font-size:13px;font-weight:600;line-height:1.35;padding:5px 10px;border-radius:10px;max-width:100%}

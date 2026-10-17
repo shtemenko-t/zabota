@@ -3,12 +3,6 @@
 
 const KEY = 'zabota-v1';
 const OWN = { name: 'Моё задание', dot: '#C83E62', bg: '#F9DCE4', ink: '#8E2443' };
-const ALB_TYPES = {
-  taste:     { name: 'Вкусы',    bg: '#FDE3D6', ink: '#8A3A1E' },
-  discovery: { name: 'Открытия', bg: '#2E2453', ink: '#F2C66D', light: true },
-  childhood: { name: 'Детство',  bg: '#E7DEF6', ink: '#4B3A7A' },
-  other:     { name: 'Другое',   bg: '#DDEFE4', ink: '#1F5139' }
-};
 const PERIODS = ['В детстве', 'В юности', 'Пару лет назад', 'Недавно'];
 const MONTHS = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
 const MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
@@ -18,15 +12,25 @@ const DAYS = ['Воскресенье','Понедельник','Вторник'
 function freshState() {
   return {
     v: 1, onboarded: false, who: {}, level: 1, off: {}, own: [],
-    day: null, week: null, log: [], stones: [], album: [], seen: {},
+    day: null, week: null, log: [], stones: [], album: [], ins: [], seen: {},
     calm: { voice: true, bg: true, vol: 0.6 }, hideInstall: false, levelAsked: 0, backupAt: null, created: todayKey()
   };
 }
 let S;
 try { S = Object.assign(freshState(), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { S = freshState(); }
+// перенос старого «Альбома себя» в «Инструкцию к себе»
+(function migrate() {
+  if (!Array.isArray(S.ins)) S.ins = [];
+  if (S.album && S.album.length && !S.insMigrated) {
+    const map = { taste: 'tastes', discovery: 'likes', childhood: 'childhood', other: 'likes' };
+    S.album.forEach(a => S.ins.push({ id: a.id, sec: map[a.type] || 'likes', text: a.text, date: a.date }));
+    S.insMigrated = true; S.album = [];
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  }
+})();
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('Не получилось сохранить: память браузера недоступна'); } }
 
-const UI = { onbStep: 0, onbWho: null, albumFilter: 'all', oporaFilter: 'all', memo: null, monthOff: 0 };
+const UI = { onbStep: 0, onbWho: null, insOpen: null, oporaFilter: 'all', memo: null, monthOff: 0 };
 
 /* ---------- utils ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -108,7 +112,7 @@ function ensureWeek() {
 function weekCount() { const m = mondayKey(); return S.log.filter(l => l.date >= m).length; }
 
 /* ---------- router ---------- */
-const TABS = ['today', 'album', 'opora', 'calm', 'month'];
+const TABS = ['today', 'me', 'opora', 'calm', 'month'];
 function route() { return (location.hash || '#today').slice(1).split('?')[0] || 'today'; }
 function go(to) { if (location.hash === '#' + to) render(); else location.hash = to; }
 window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
@@ -119,13 +123,13 @@ function render() {
   if (!S.onboarded) { tabs.hidden = true; app.className = 'no-tabs'; app.innerHTML = vOnboarding(); return; }
   const r = route();
   ensureDay(); ensureWeek();
-  const views = { today: vToday, album: vAlbum, opora: vOpora, month: vMonth, calm: vCalm, deck: vDeck };
+  const views = { today: vToday, me: vMe, album: vMe, opora: vOpora, month: vMonth, calm: vCalm, deck: vDeck };
   const fn = views[r] || vToday;
-  const withTabs = TABS.includes(r) || !views[r];
+  const withTabs = TABS.includes(r) || r === 'album' || !views[r];
   tabs.hidden = !withTabs;
   app.className = withTabs ? '' : 'no-tabs';
   app.innerHTML = fn();
-  tabs.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.tab === (views[r] ? r : 'today')));
+  tabs.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.tab === (views[r] ? (r === 'album' ? 'me' : r) : 'today')));
   tabs.querySelectorAll('a').forEach(a => a.setAttribute('aria-current', a.classList.contains('on') ? 'page' : 'false'));
 }
 
@@ -147,7 +151,7 @@ function vOnboarding() {
     '<div class="box" style="background:var(--peach);color:#6E2C14"><div class="k" style="color:var(--peach-ink)">Реальный риск — пока пропускаем</div><div style="font-size:15px;line-height:1.5">Можно потерять работу, премию, деньги или жильё. Такие ситуации пока пропускаем</div></div>' +
     '<div style="font-size:14px;line-height:1.5;color:var(--soft)">Начнём с заданий только для себя, потом с незнакомыми людьми, и уже потом с близкими</div><button class="btn btn-night" style="margin-top:auto" data-act="onbNext">Понятно</button>';
   if (s === 3) {
-    const how = [['1', 'Карта дня', 'Утром маленькое задание для себя. Пять минут, не больше', '#FDE3D6', '#8A3A1E'], ['7', 'Карта недели', 'Задание посмелее, на всю неделю', '#2E2453', '#F2C66D'], ['∞', 'Копилка и альбом', 'Всё, что получилось и что ты узнала о себе, остаётся с тобой', '#DDEFE4', '#1F5139']];
+    const how = [['1', 'Карта дня', 'Утром маленькое задание для себя. Пять минут, не больше', '#FDE3D6', '#8A3A1E'], ['7', 'Карта недели', 'Задание посмелее, на всю неделю', '#2E2453', '#F2C66D'], ['∞', 'Копилка и инструкция к себе', 'Всё, что получилось, и всё, что ты узнала о себе, остаётся с тобой', '#DDEFE4', '#1F5139']];
     body = '<h1>Как это устроено</h1>' + how.map(h => '<div class="entry"><div style="flex:none;width:40px;height:40px;border-radius:12px;background:' + h[3] + ';color:' + h[4] + ';display:flex;align-items:center;justify-content:center;font-family:Unbounded,sans-serif;font-weight:700">' + h[0] + '</div><div><div class="tx" style="font-weight:800">' + h[1] + '</div><div class="small" style="font-size:14px">' + h[2] + '</div></div></div>').join('') +
       '<div class="box" style="background:var(--lilac);color:var(--soft);font-size:14px;line-height:1.5">Здесь нет серий и штрафов. Карту можно перетянуть или сказать «не сегодня» — это тоже забота о себе</div><button class="btn btn-night" style="margin-top:auto" data-act="onbNext">Дальше</button>';
   }
@@ -167,7 +171,8 @@ function cardFront(t, weekly) {
 function ratingPanel(scope, r, t) {
   const defs = [['a', 'Тревога', '#C83E62', '#F6C9D5'], ['g', 'Вина', '#7B6A9E', '#D9CEEE'], ['j', 'Удовольствие', '#3C8A63', '#BFE3CE']];
   const rows = defs.map(d => '<div class="rate-row"><div class="nm">' + d[1] + '</div><div class="dots">' + [1, 2, 3, 4, 5].map(n => '<button class="dot" style="border-color:' + d[2] + ';background:' + (r[d[0]] >= n ? d[3] : '#fff') + '" aria-label="' + d[1] + ': ' + n + ' из 5" data-act="rate" data-scope="' + scope + '" data-k="' + d[0] + '" data-n="' + n + '"></button>').join('') + '</div></div>').join('');
-  const alb = t.alb ? '<label class="field-label" for="alb-' + scope + '">Находка для альбома себя</label><input type="text" id="alb-' + scope + '" placeholder="Например: люблю гулять одна" maxlength="120">' : '';
+  const sec = t.ins && SECTIONS.find(x => x.id === t.ins);
+  const alb = sec ? '<label class="field-label" for="alb-' + scope + '">В инструкцию к себе · ' + esc(sec.title) + '</label><input type="text" id="alb-' + scope + '" placeholder="' + esc(sec.prompts[0]) + '" maxlength="140">' : '';
   return '<h3>Как это было?</h3>' + rows + '<label class="field-label" for="note-' + scope + '">Что заметила? <span style="font-weight:500;color:var(--muted)">необязательно</span></label><textarea id="note-' + scope + '" rows="2" maxlength="300"></textarea>' + alb +
     '<button class="btn btn-night" data-act="saveTask" data-scope="' + scope + '">Положить в копилку опоры</button>';
 }
@@ -226,7 +231,8 @@ function doneBlock(t, wt) {
   } else {
     h += '<div class="entry next" style="opacity:.75"><div class="ic" style="background:var(--sage);color:var(--sage-ink)">✓</div><div style="flex:1"><div class="tx" style="font-weight:800">Карта недели выполнена</div><div class="small">Новая придёт в понедельник</div></div></div>';
   }
-  h += '<button class="entry next" data-act="addAlbum"><div class="ic" style="background:#E7DEF6;color:#4B3A7A">' + catIcon('know', 22) + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">Находка в альбом себя</div><div class="small">Что ты сегодня узнала о себе: вкус, желание, «оказывается, я люблю…»</div></div><span class="chev" aria-hidden="true">›</span></button>';
+  const nextSec = SECTIONS.slice().sort((a, b) => S.ins.filter(i => i.sec === a.id).length - S.ins.filter(i => i.sec === b.id).length)[0];
+  h += '<button class="entry next" data-act="openSec" data-id="' + nextSec.id + '"><div class="ic" style="background:#E7DEF6;color:#4B3A7A">' + catIcon('know', 22) + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">Дополнить инструкцию к себе</div><div class="small">' + esc(nextSec.title) + ': ' + esc(nextSec.prompts[0].charAt(0).toLowerCase() + nextSec.prompts[0].slice(1)) + '</div></div><span class="chev" aria-hidden="true">›</span></button>';
   h += '<a class="entry next" href="#calm" style="text-decoration:none;color:inherit"><div class="ic" style="background:#DDEFE4;color:#1F5139">' + ICON.wave + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">Пять минут покоя</div><div class="small">Сканирование тела твоим темпом, под поющие чаши</div></div><span class="chev" aria-hidden="true">›</span></a>';
   h += '</div><div class="pad small" style="text-align:center;padding-top:18px;font-size:14px">Новая карта дня откроется завтра утром</div>';
   return h;
@@ -242,29 +248,36 @@ function weekSheet() {
   return h;
 }
 
-/* ---------- album ---------- */
-function vAlbum() {
-  const f = UI.albumFilter;
-  const items = S.album.filter(a => f === 'all' || a.type === f).slice().reverse();
-  const month = S.album.filter(a => a.date.slice(0, 7) === todayKey().slice(0, 7)).length;
-  let h = '<div class="head"><button class="icon-btn" style="position:absolute;top:20px;right:16px" aria-label="Добавить находку" data-act="addAlbum">' + ICON.plus + '</button><h1>Альбом себя</h1><div class="sub">' +
-    (S.album.length ? 'Всё, что ты узнала о себе. ' + month + ' ' + plural(month, 'находка', 'находки', 'находок') + ' за ' + MONTHS[new Date().getMonth()] : 'Здесь будут твои находки о себе') + '</div></div>';
-  h += '<div class="pad" style="padding-top:14px"><div class="chips">' + [['all', 'Все']].concat(Object.keys(ALB_TYPES).map(k => [k, ALB_TYPES[k].name])).map(x => '<button class="chip' + (f === x[0] ? ' on' : '') + '" data-act="albumFilter" data-f="' + x[0] + '">' + x[1] + '</button>').join('') + '</div></div>';
-  if (!items.length) {
-    h += '<div class="panel" style="margin-top:16px"><h3>' + (S.album.length ? 'В этой категории пока пусто' : 'Альбом пока чистый') + '</h3><p style="color:var(--muted)">Находки появляются после заданий «Узнать себя». А можно добавить первую прямо сейчас: любимый запах, вкус, время суток или то, что радовало в детстве</p><button class="btn btn-night" data-act="addAlbum">Добавить находку</button></div>';
-    return h;
-  }
-  h += '<div class="grid">' + items.map((a, i) => {
-    const ty = ALB_TYPES[a.type] || ALB_TYPES.other;
-    const wide = a.text.length > 38 || (i === 0 && items.length > 2);
-    return '<button class="acard' + (wide ? ' wide' : '') + '" style="background:' + ty.bg + ';color:' + (ty.light ? '#fff' : 'var(--ink)') + '" data-act="albumItem" data-id="' + a.id + '"><div class="k" style="color:' + ty.ink + '">' + ty.name + '</div><div class="v">' + esc(a.text) + '</div><div class="dt">' + fmtShort(a.date) + '</div></button>';
+/* ---------- инструкция к себе ---------- */
+function vMe() {
+  const n = S.ins.length;
+  const filled = SECTIONS.filter(x => S.ins.some(i => i.sec === x.id)).length;
+  let h = '<div class="head"><h1>Инструкция к себе</h1><div class="sub">' +
+    (n ? 'Собрано ' + n + ' ' + plural(n, 'пункт', 'пункта', 'пунктов') + ' в ' + filled + ' из ' + SECTIONS.length + ' разделов' : 'Твои вкусы, желания и то, что даёт тебе силы. Собирай понемногу — каждая находка делает тебя понятнее самой себе') + '</div></div>';
+  if (n >= 3) h += '<div class="pad" style="padding-top:12px"><button class="pill-link" data-act="exportIns">' + ICON.star + 'Сохранить инструкцию текстом</button></div>';
+  h += '<div class="list" style="padding-top:16px">' + SECTIONS.map(sec => {
+    const items = S.ins.filter(i => i.sec === sec.id);
+    const col = sec.light ? '#fff' : 'var(--ink)';
+    const preview = items.length ? '<div class="ins-prev">' + items.slice(-3).reverse().map(i => '<span style="background:' + (sec.light ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.7)') + '">' + esc(i.text) + '</span>').join('') + '</div>'
+      : '<div style="font-size:14px;opacity:.85;line-height:1.4">' + esc(sec.prompts[0]) + '</div>';
+    return '<button class="ins-card" style="background:' + sec.bg + ';color:' + col + '" data-act="openSec" data-id="' + sec.id + '"><div style="display:flex;align-items:center;gap:10px;width:100%"><span style="color:' + sec.ink + ';display:flex">' + catIcon(sec.ic, 22) + '</span><span class="ins-t">' + esc(sec.title) + '</span><span class="ins-n" style="color:' + sec.ink + '">' + (items.length || '+') + '</span></div>' + preview + '</button>';
   }).join('') + '</div>';
   return h;
 }
-function albumSheet() {
-  return '<div class="grab"></div><h2>Новая находка</h2><div class="small" style="font-size:14px">Что ты узнала о себе? Даже мелочь — часть тебя</div><div class="chips" id="albTypes">' +
-    Object.keys(ALB_TYPES).map((k, i) => '<button class="chip' + (i === 0 ? ' on' : '') + '" data-act="albType" data-k="' + k + '">' + ALB_TYPES[k].name + '</button>').join('') +
-    '</div><label class="field-label" for="albText">Находка</label><input type="text" id="albText" maxlength="120" placeholder="Например: люблю раннее утро, пока все спят"><div class="row"><button class="btn btn-ghost" style="flex:none" data-act="closeSheet">Отмена</button><button class="btn btn-night" data-act="saveAlbum">Добавить в альбом</button></div>';
+function secSheet(id) {
+  const sec = SECTIONS.find(x => x.id === id);
+  const items = S.ins.filter(i => i.sec === id);
+  return '<div class="grab"></div><div style="display:flex;align-items:center;gap:10px"><span style="width:40px;height:40px;border-radius:12px;background:' + sec.bg + ';color:' + sec.ink + ';display:flex;align-items:center;justify-content:center;flex:none">' + catIcon(sec.ic, 22) + '</span><h2>' + esc(sec.title) + '</h2></div>' +
+    '<div class="field-label">Вопросы-подсказки</div><div class="chips">' + sec.prompts.map(p => '<button class="chip soft" style="text-align:left;line-height:1.3;padding:8px 12px;height:auto" data-act="insPrompt" data-p="' + esc(p) + '">' + esc(p) + '</button>').join('') + '</div>' +
+    '<div class="row"><label for="insText" class="sr-only">Новый пункт</label><input type="text" id="insText" maxlength="140" placeholder="' + esc(sec.prompts[0]) + '" style="flex:1;min-width:0"><button class="btn btn-night" style="flex:none;min-height:48px;font-size:14px" data-act="addIns" data-id="' + id + '">Добавить</button></div>' +
+    (items.length ? '<div style="display:flex;flex-direction:column;gap:8px">' + items.slice().reverse().map(i => '<div class="entry" style="align-items:center;background:#F7F3FB"><div style="flex:1;min-width:0"><div class="tx">' + esc(i.text) + '</div><div class="mt">' + fmtShort(i.date) + '</div></div><button class="icon-btn" style="background:#fff;width:40px;height:40px" aria-label="Удалить пункт" data-act="delIns" data-id="' + i.id + '" data-sec="' + id + '">' + ICON.close + '</button></div>').join('') + '</div>'
+      : '<div class="small" style="font-size:14px">Пока пусто. Начни с любого вопроса выше — даже с мелочи</div>') +
+    '<button class="link-btn" style="align-self:center" data-act="closeSheet">Готово</button>';
+}
+function insText() {
+  let t = 'Инструкция к себе\n';
+  SECTIONS.forEach(sec => { const items = S.ins.filter(i => i.sec === sec.id); if (!items.length) return; t += '\n' + sec.title + '\n' + items.map(i => '— ' + i.text).join('\n') + '\n'; });
+  return t + '\nСобрано в «Тренажёре заботы о себе»';
 }
 
 /* ---------- opora ---------- */
@@ -324,10 +337,10 @@ function vMonth() {
   const base = new Date(); base.setDate(1); base.setMonth(base.getMonth() + UI.monthOff);
   const ym = base.getFullYear() + '-' + pad(base.getMonth() + 1);
   const logs = S.log.filter(l => l.date.slice(0, 7) === ym);
-  const finds = S.album.filter(a => a.date.slice(0, 7) === ym).length;
+  const finds = S.ins.filter(a => a.date.slice(0, 7) === ym).length;
   const isCur = UI.monthOff === 0;
   let h = '<div class="head"><div class="small" style="font-size:14px;font-weight:500">Итог месяца</div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h1>Твой ' + MONTHS[base.getMonth()] + '</h1><div style="display:flex;gap:6px"><button class="icon-btn" aria-label="Предыдущий месяц" data-act="month" data-d="-1">' + ICON.back + '</button><button class="icon-btn" aria-label="Следующий месяц" data-act="month" data-d="1"' + (isCur ? ' disabled style="opacity:.35"' : '') + '><span style="transform:scaleX(-1);display:flex">' + ICON.back + '</span></button></div></div></div>';
-  h += '<div class="grid" style="padding-top:14px"><div class="stat" style="background:var(--night);color:#fff"><b style="color:var(--gold)">' + logs.length + '</b><div style="font-size:14px;line-height:1.35;color:#E4DDF5">' + plural(logs.length, 'раз', 'раза', 'раз') + ' ты выбрала себя</div></div><div class="stat" style="background:#fff"><b style="color:var(--rose)">' + finds + '</b><div style="font-size:14px;line-height:1.35;color:var(--muted)">' + plural(finds, 'новая находка', 'новые находки', 'новых находок') + ' о себе</div></div></div>';
+  h += '<div class="grid" style="padding-top:14px"><div class="stat" style="background:var(--night);color:#fff"><b style="color:var(--gold)">' + logs.length + '</b><div style="font-size:14px;line-height:1.35;color:#E4DDF5">' + plural(logs.length, 'раз', 'раза', 'раз') + ' ты выбрала себя</div></div><div class="stat" style="background:#fff"><b style="color:var(--rose)">' + finds + '</b><div style="font-size:14px;line-height:1.35;color:var(--muted)">' + plural(finds, 'новый пункт', 'новых пункта', 'новых пунктов') + ' в инструкции к себе</div></div></div>';
   const rated = logs.filter(l => l.a > 0);
   h += '<div class="panel"><div><div style="font-size:16px;font-weight:800">Тревога после заданий</div><div class="small">Средняя по неделям, из 5</div></div>';
   if (rated.length < 2) {
@@ -445,28 +458,28 @@ const A = {
     const today = todayKey();
     S.stones.push({ id: uid(), kind: 'task', text: t.t, note: note.trim(), date: today, cat: t.c, wk: sc === 'week' });
     S.log.push({ date: today, id: t.id, c: t.c, l: t.l, wk: sc === 'week', a: o.r.a, g: o.r.g, j: o.r.j });
-    if (alb.trim()) S.album.push({ id: uid(), type: t.alb || 'other', text: alb.trim(), date: today });
+    if (alb.trim() && t.ins) S.ins.push({ id: uid(), sec: t.ins, text: alb.trim(), date: today });
     o.saved = true; if (sc === 'day') UI.justSaved = true; save();
-    if (sc === 'week') { refreshSheet('week', weekSheet()); toast(alb.trim() ? 'Камушек в копилке, находка в альбоме' : 'Камушек в копилке'); } else { render(); window.scrollTo(0, 0); if (alb.trim()) toast('Находка в альбоме'); }
+    if (sc === 'week') { refreshSheet('week', weekSheet()); toast(alb.trim() ? 'Камушек в копилке, пункт в инструкции' : 'Камушек в копилке'); } else { render(); window.scrollTo(0, 0); if (alb.trim()) toast('Записано в инструкцию к себе'); }
   },
   openWeek: () => openSheet(weekSheet(), 'week'),
   closeSheet: () => { closeSheet(); render(); },
   levelUp: () => { S.levelAsked = S.level; S.level = Math.min(4, S.level + 1); save(); render(); toast('Новые задания добавлены в колоду'); },
   levelStay: () => { S.levelAsked = S.level; save(); render(); },
-  albumFilter: el => { UI.albumFilter = el.dataset.f; render(); },
-  addAlbum: () => openSheet(albumSheet(), 'album'),
-  albType: el => { el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.remove('on')); el.classList.add('on'); },
-  saveAlbum: () => {
-    const text = $('#albText').value.trim(); if (!text) { $('#albText').focus(); return; }
-    const k = ($('#albTypes .chip.on') || {}).dataset.k || 'other';
-    S.album.push({ id: uid(), type: k, text, date: todayKey() }); save(); closeSheet(); render(); toast('Находка в альбоме себя');
+  openSec: el => { UI.insOpen = el.dataset.id; openSheet(secSheet(el.dataset.id), 'sec'); },
+  insPrompt: el => { const i = $('#insText'); i.placeholder = el.dataset.p; i.focus(); },
+  addIns: el => {
+    const i = $('#insText'); const text = i.value.trim(); if (!text) { i.focus(); return; }
+    S.ins.push({ id: uid(), sec: el.dataset.id, text, date: todayKey() }); save();
+    refreshSheet('sec', secSheet(el.dataset.id)); render(); toast('Записано в инструкцию');
   },
-  albumItem: el => {
-    const a = S.album.find(x => x.id === el.dataset.id); if (!a) return;
-    const ty = ALB_TYPES[a.type] || ALB_TYPES.other;
-    openSheet('<div class="grab"></div><div class="small" style="font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:12px">' + ty.name + ' · ' + fmtShort(a.date) + '</div><h2>' + esc(a.text) + '</h2><div class="row"><button class="btn btn-ghost" data-act="closeSheet">Закрыть</button><button class="btn btn-line-rose" data-act="delAlbum" data-id="' + a.id + '">Удалить</button></div>', 'albumItem');
+  delIns: el => { S.ins = S.ins.filter(x => x.id !== el.dataset.id); save(); refreshSheet('sec', secSheet(el.dataset.sec)); render(); },
+  exportIns: async () => {
+    const text = insText();
+    try { if (navigator.share) { await navigator.share({ title: 'Инструкция к себе', text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(text); toast('Скопировано — можно вставить в заметки'); }
+    catch (e) { const f = new File([text], 'instrukciya-k-sebe.txt', { type: 'text/plain' }); const u = URL.createObjectURL(f); const l = document.createElement('a'); l.href = u; l.download = f.name; document.body.appendChild(l); l.click(); l.remove(); }
   },
-  delAlbum: el => { S.album = S.album.filter(x => x.id !== el.dataset.id); save(); closeSheet(); render(); },
   oporaFilter: el => { UI.oporaFilter = el.dataset.f; render(); },
   anxious: () => {
     const pool = S.stones.filter(s => s.kind !== 'first');
@@ -537,6 +550,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.target.id === 'ownInput') { e.preventDefault(); A.addOwn(); }
+  if (e.key === 'Enter' && e.target.id === 'insText') { e.preventDefault(); A.addIns({ dataset: { id: UI.insOpen } }); }
   if (e.key === 'Escape') { if (Player.el) Player.close(); else closeSheet(); }
 });
 
