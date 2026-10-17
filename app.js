@@ -12,7 +12,7 @@ const DAYS = ['Воскресенье','Понедельник','Вторник'
 function freshState() {
   return {
     v: 1, onboarded: false, who: {}, level: 1, off: {}, own: [],
-    day: null, week: null, log: [], stones: [], album: [], ins: [], seen: {},
+    day: null, week: null, log: [], stones: [], album: [], ins: [], seen: {}, calmDays: {}, qSeen: {}, achv: [],
     calm: { voice: true, bg: true, vol: 0.6 }, hideInstall: false, levelAsked: 0, backupAt: null, created: todayKey()
   };
 }
@@ -129,6 +129,7 @@ function render() {
   tabs.hidden = !withTabs;
   app.className = withTabs ? '' : 'no-tabs';
   app.innerHTML = fn();
+  setTimeout(checkQuests, r === 'today' ? 700 : 50);
   tabs.querySelectorAll('a').forEach(a => a.classList.toggle('on', a.dataset.tab === (views[r] ? (r === 'album' ? 'me' : r) : 'today')));
   tabs.querySelectorAll('a').forEach(a => a.setAttribute('aria-current', a.classList.contains('on') ? 'page' : 'false'));
 }
@@ -192,7 +193,7 @@ function vToday() {
     h += '<div class="panel sage"><h3 style="color:var(--sage-ink)">Похоже, ты готова к следующему шагу</h3><p>На уровне «' + LEVELS[S.level - 1].title + '» уже ' + atLevel + ' ' + plural(atLevel, 'задание', 'задания', 'заданий') + '. Добавить в колоду задания уровня «' + LEVELS[S.level].title + '»?</p><div class="row"><button class="btn btn-night" style="min-height:46px;font-size:15px" data-act="levelUp">Добавить</button><button class="btn btn-ghost" style="min-height:46px" data-act="levelStay">Пока останусь</button></div></div>';
   }
 
-  if (S.day.saved) return h + doneBlock(t, wt);
+  if (S.day.saved) return h + doneBlock(t) + questsBlock(t, wt);
 
   h += '<div class="card-wrap">';
   if (S.day.status === 'skipped') {
@@ -204,39 +205,121 @@ function vToday() {
 
   if (S.day.status === 'open' && S.day.flipped) {
     h += '<div class="pad" style="padding-top:16px;display:flex;flex-direction:column;gap:8px"><div class="row"><button class="btn btn-rose" data-act="done" data-scope="day">Сделала</button><button class="btn btn-ghost" data-act="redraw" data-scope="day"' + (S.day.redraws ? '' : ' disabled') + '>' + (S.day.redraws ? 'Другую карту' : 'Перетянуто') + '</button></div>' +
+      (t.go ? '<button class="btn btn-ghost" style="min-height:46px;font-size:15px;border-color:var(--night)" data-act="openJar">' + ICON.jar + 'Открыть копилку</button>' : '') +
       '<div style="display:flex;justify-content:space-between;align-items:center"><button class="link-btn" data-act="skip">Не сегодня</button><a class="pill-link" href="#calm">' + ICON.wave + 'Тревожно? Успокоиться</a></div></div>';
   }
   if (S.day.status === 'done' && !S.day.saved) h += '<div class="panel">' + ratingPanel('day', S.day.r, t) + '</div>';
 
-  if (!(S.day.status === 'done' && !S.day.saved)) {
-    const wdone = S.week.saved;
-    h += '<button class="tile" data-act="openWeek"><div class="ic" style="background:#2E2453;color:#F2C66D">' + ICON.star + '</div><div style="min-width:0"><div class="t1">' + (wdone ? 'Карта недели · выполнена' : 'Карта недели · до воскресенья') + '</div><div class="t2">' + esc(wt.t) + '</div></div></button>';
-  }
+  if (!(S.day.status === 'done' && !S.day.saved)) h += questsBlock(t, wt);
   return h;
 }
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c; }
 
 /* after the day card is saved: celebration + what's next */
-function doneBlock(t, wt) {
+function doneBlock(t) {
   const n = S.stones.length;
   const drop = UI.justSaved; UI.justSaved = false;
   const c = catOf(t);
-  let h = '<div class="celebrate' + (drop ? ' drop' : '') + '"><div class="jar-wrap">' + jarSVG(n, 110) + '<span class="falling" aria-hidden="true"></span></div>' +
+  return '<div class="celebrate' + (drop ? ' drop' : '') + '"><div class="jar-wrap">' + jarSVG(n, 110) + '<span class="falling" aria-hidden="true"></span></div>' +
     '<div class="h-display" style="font-size:22px;line-height:1.25;text-align:center">Камушек в копилке</div>' +
     '<div class="sub" style="text-align:center;max-width:300px">Сегодня ты была на своей стороне. Это уже ' + n + '-й камушек в твоей копилке</div>' +
     '<div class="today-card"><span class="d" style="background:' + c.dot + '"></span><span>' + esc(t.t) + '</span></div></div>';
-  h += '<div class="label">Что дальше</div><div class="list">';
-  if (!S.week.saved) {
-    h += '<button class="entry next" data-act="openWeek"><div class="ic" style="background:#2E2453;color:#F2C66D">' + ICON.star + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">Карта недели</div><div class="small">' + esc(wt.t) + '</div></div><span class="chev" aria-hidden="true">›</span></button>';
-  } else {
-    h += '<div class="entry next" style="opacity:.75"><div class="ic" style="background:var(--sage);color:var(--sage-ink)">✓</div><div style="flex:1"><div class="tx" style="font-weight:800">Карта недели выполнена</div><div class="small">Новая придёт в понедельник</div></div></div>';
-  }
+}
+
+/* ---------- квесты на сегодня ---------- */
+function questState() {
+  const k = todayKey();
+  return {
+    card: !!(S.day && S.day.saved),
+    week: !!(S.week && S.week.saved),
+    ins: S.ins.some(i => i.date === k),
+    calm: !!S.calmDays[k]
+  };
+}
+const QUESTS = [
+  { id: 'card', title: 'Карта дня', todo: 'Открой карту и выполни задание', done: 'Камушек в копилке' },
+  { id: 'week', title: 'Карта недели', todo: '', done: 'Выполнена на этой неделе' },
+  { id: 'ins', title: 'Дополни инструкцию к себе', todo: '', done: 'Сегодня ты узнала о себе что-то новое' },
+  { id: 'calm', title: 'Пять минут покоя', todo: 'Сканирование тела или любая практика из «Покоя»', done: 'Ты дала себе отдохнуть' }
+];
+function questsBlock(t, wt) {
+  const q = questState();
+  const n = Object.values(q).filter(Boolean).length;
   const nextSec = SECTIONS.slice().sort((a, b) => S.ins.filter(i => i.sec === a.id).length - S.ins.filter(i => i.sec === b.id).length)[0];
-  h += '<button class="entry next" data-act="openSec" data-id="' + nextSec.id + '"><div class="ic" style="background:#E7DEF6;color:#4B3A7A">' + catIcon('know', 22) + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">Дополнить инструкцию к себе</div><div class="small">' + esc(nextSec.title) + ': ' + esc(nextSec.prompts[0].charAt(0).toLowerCase() + nextSec.prompts[0].slice(1)) + '</div></div><span class="chev" aria-hidden="true">›</span></button>';
-  h += '<a class="entry next" href="#calm" style="text-decoration:none;color:inherit"><div class="ic" style="background:#DDEFE4;color:#1F5139">' + ICON.wave + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">Пять минут покоя</div><div class="small">Сканирование тела твоим темпом, под поющие чаши</div></div><span class="chev" aria-hidden="true">›</span></a>';
-  h += '</div><div class="pad small" style="text-align:center;padding-top:18px;font-size:14px">Новая карта дня откроется завтра утром</div>';
+  const todo = { week: wt.t, ins: nextSec.title + ': ' + nextSec.prompts[0].charAt(0).toLowerCase() + nextSec.prompts[0].slice(1) };
+  const acts = { card: 'questCard', week: 'openWeek', ins: 'openSec', calm: 'questCalm' };
+  const icons = { card: ['#FDE3D6', '#8A3A1E', ICON.today], week: ['#2E2453', '#F2C66D', ICON.star], ins: ['#E7DEF6', '#4B3A7A', catIcon('know', 22)], calm: ['#DDEFE4', '#1F5139', ICON.wave] };
+  let h = '<div class="quests"><div class="q-head"><div><div class="h-display" style="font-size:18px">Задания на сегодня</div><div class="small">' + (n === 4 ? 'Все четыре выполнены. Это день заботы о себе' : 'Выполни все четыре — получишь награду дня') + '</div></div><div class="q-count" aria-label="Выполнено ' + n + ' из 4"><b>' + n + '</b>/4</div></div>' +
+    '<div class="q-bar"><div style="width:' + (n * 25) + '%"></div></div>';
+  QUESTS.forEach(qq => {
+    const done = q[qq.id];
+    const ic = icons[qq.id];
+    const sub = done ? qq.done : (qq.todo || todo[qq.id]);
+    h += '<button class="q-row' + (done ? ' done' : '') + '" data-act="' + acts[qq.id] + '"' + (qq.id === 'ins' ? ' data-id="' + nextSec.id + '"' : '') + '>' +
+      '<span class="q-check" aria-hidden="true">' + (done ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg>' : '') + '</span>' +
+      '<span class="q-ic" style="background:' + ic[0] + ';color:' + ic[1] + '">' + ic[2] + '</span>' +
+      '<span class="q-tx"><b>' + qq.title + '</b><span>' + esc(sub) + '</span></span>' +
+      '<span class="sr-only">' + (done ? 'выполнено' : 'не выполнено') + '</span></button>';
+  });
+  h += '</div>';
+  if (S.achv.length) h += '<div class="pad small" style="text-align:center;padding-top:12px">Дней заботы о себе: ' + S.achv.length + '</div>';
+  if (S.day.saved) h += '<div class="pad small" style="text-align:center;padding-top:8px;font-size:14px">Новая карта дня откроется завтра утром</div>';
   return h;
 }
+// fires fireworks for quests completed since last check, and the achievement when all four are done
+function checkQuests() {
+  if (!S.onboarded) return;
+  const k = todayKey();
+  const q = questState();
+  const seen = S.qSeen[k] || {};
+  const fresh = QUESTS.filter(x => q[x.id] && !seen[x.id]);
+  if (!fresh.length) return;
+  fresh.forEach(x => { seen[x.id] = true; });
+  S.qSeen = { [k]: seen };
+  const all = QUESTS.every(x => q[x.id]);
+  let newAch = false;
+  if (all && !S.achv.includes(k)) { S.achv.push(k); newAch = true; }
+  save();
+  if (newAch) { Fireworks.burst(3); setTimeout(showAchievement, 900); }
+  else { Fireworks.burst(1); toast('Задание выполнено: ' + fresh.map(x => x.title.toLowerCase()).join(', ')); }
+}
+function showAchievement() {
+  const n = S.achv.length;
+  openSheet('<div class="grab"></div><div class="ach">' + medalSVG() + '<div class="h-display" style="font-size:22px;text-align:center">День заботы о себе</div><p style="margin:0;text-align:center;color:var(--soft);line-height:1.5">Ты выполнила все задания на сегодня: карту дня, карту недели, дополнила инструкцию к себе и дала себе отдохнуть' + (n > 1 ? '. Это уже ' + n + '-й такой день' : '') + '</p></div><button class="btn btn-rose" data-act="closeSheet">Ура!</button>', 'ach');
+}
+function medalSVG() {
+  return '<svg width="120" height="140" viewBox="0 0 120 140" aria-hidden="true"><path d="M38 0h18l10 40H48z" fill="#C83E62"/><path d="M82 0H64L54 40h18z" fill="#7B6A9E"/><circle cx="60" cy="86" r="46" fill="#F2C66D"/><circle cx="60" cy="86" r="36" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width="3"/><path d="M60 62c3 11 8 16 19 19-11 3-16 8-19 19-3-11-8-16-19-19 11-3 16-8 19-19z" fill="#2E2453"/></svg>';
+}
+
+/* ---------- фейерверк ---------- */
+const Fireworks = {
+  burst(times) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let c = document.getElementById('fw');
+    if (!c) { c = document.createElement('canvas'); c.id = 'fw'; c.setAttribute('aria-hidden', 'true'); document.body.appendChild(c); }
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    c.width = innerWidth * dpr; c.height = innerHeight * dpr;
+    const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const cols = ['#F2C66D', '#C83E62', '#7B6A9E', '#3C8A63', '#F6C9D5', '#FDE3D6'];
+    const parts = [];
+    for (let b = 0; b < times; b++) {
+      setTimeout(() => {
+        const cx = innerWidth * (0.25 + Math.random() * 0.5), cy = innerHeight * (0.22 + Math.random() * 0.25);
+        for (let i = 0; i < 70; i++) {
+          const a = Math.random() * Math.PI * 2, v = 2 + Math.random() * 4.5;
+          parts.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, c: cols[i % cols.length], r: 2 + Math.random() * 2.5 });
+        }
+      }, b * 450);
+    }
+    const t0 = performance.now();
+    const step = now => {
+      x.clearRect(0, 0, innerWidth, innerHeight);
+      parts.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.07; p.vx *= 0.985; p.life -= 0.013; if (p.life > 0) { x.globalAlpha = Math.max(0, p.life); x.fillStyle = p.c; x.beginPath(); x.arc(p.x, p.y, p.r, 0, 7); x.fill(); } });
+      if (now - t0 < 1800 + times * 450) requestAnimationFrame(step); else { x.clearRect(0, 0, innerWidth, innerHeight); }
+    };
+    requestAnimationFrame(step);
+  }
+};
 
 /* ---------- week sheet ---------- */
 function weekSheet() {
@@ -244,7 +327,7 @@ function weekSheet() {
   let h = '<div class="grab"></div>' + cardFront(t, true).replace('class="face front"', 'class="face front static"');
   if (w.saved) h += '<div class="panel sage" style="margin:0"><h3>Выполнено</h3><p style="color:#2F6B4B">Записано в копилку опоры. В понедельник придёт новая карта недели</p></div><button class="btn btn-ghost" data-act="closeSheet">Закрыть</button>';
   else if (w.status === 'done') h += '<div class="panel" style="margin:0;padding:0">' + ratingPanel('week', w.r, t) + '</div>';
-  else h += '<div class="row"><button class="btn btn-rose" data-act="done" data-scope="week">Сделала</button><button class="btn btn-ghost" data-act="redraw" data-scope="week"' + (w.redraws ? '' : ' disabled') + '>' + (w.redraws ? 'Другую карту' : 'Перетянуто') + '</button></div><button class="link-btn" data-act="closeSheet" style="align-self:center">Закрыть</button>';
+  else h += (t.go ? '<button class="btn btn-ghost" style="min-height:46px;font-size:15px;border-color:var(--night)" data-act="openJar">' + ICON.jar + 'Открыть копилку</button>' : '') + '<div class="row"><button class="btn btn-rose" data-act="done" data-scope="week">Сделала</button><button class="btn btn-ghost" data-act="redraw" data-scope="week"' + (w.redraws ? '' : ' disabled') + '>' + (w.redraws ? 'Другую карту' : 'Перетянуто') + '</button></div><button class="link-btn" data-act="closeSheet" style="align-self:center">Закрыть</button>';
   return h;
 }
 
@@ -357,6 +440,8 @@ function vMonth() {
   const isCur = UI.monthOff === 0;
   let h = '<div class="head"><div class="small" style="font-size:14px;font-weight:500">Итог месяца</div><div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h1>Твой ' + MONTHS[base.getMonth()] + '</h1><div style="display:flex;gap:6px"><button class="icon-btn" aria-label="Предыдущий месяц" data-act="month" data-d="-1">' + ICON.back + '</button><button class="icon-btn" aria-label="Следующий месяц" data-act="month" data-d="1"' + (isCur ? ' disabled style="opacity:.35"' : '') + '><span style="transform:scaleX(-1);display:flex">' + ICON.back + '</span></button></div></div></div>';
   h += '<div class="grid" style="padding-top:14px"><div class="stat" style="background:var(--night);color:#fff"><b style="color:var(--gold)">' + logs.length + '</b><div style="font-size:14px;line-height:1.35;color:#E4DDF5">' + plural(logs.length, 'раз', 'раза', 'раз') + ' ты выбрала себя</div></div><div class="stat" style="background:#fff"><b style="color:var(--rose)">' + finds + '</b><div style="font-size:14px;line-height:1.35;color:var(--muted)">' + plural(finds, 'новый пункт', 'новых пункта', 'новых пунктов') + ' в инструкции к себе</div></div></div>';
+  const care = S.achv.filter(d => d.slice(0, 7) === ym).length;
+  if (care) h += '<div class="panel" style="flex-direction:row;align-items:center;gap:14px"><div style="flex:none">' + medalSVG().replace('width="120" height="140"', 'width="44" height="52"') + '</div><div><div style="font-size:16px;font-weight:800">' + care + ' ' + plural(care, 'день', 'дня', 'дней') + ' заботы о себе</div><div class="small">Дни, когда ты выполнила все четыре задания</div></div></div>';
   const rated = logs.filter(l => l.a > 0);
   h += '<div class="panel"><div><div style="font-size:16px;font-weight:800">Тревога после заданий</div><div class="small">Средняя по неделям, из 5</div></div>';
   if (rated.length < 2) {
@@ -389,8 +474,7 @@ function vCalm() {
   return '<div class="head"><h1>Успокоиться</h1><div class="sub">Тревога перед непривычным — нормальна. Она значит, что ты делаешь новое, а не что ты в опасности</div></div>' +
     '<div class="panel night" style="margin-top:18px;padding:22px;border-radius:26px;position:relative;overflow:hidden"><div style="position:absolute;right:-40px;top:-40px;width:170px;height:170px;border-radius:50%;background:#3D3168"></div><div style="position:absolute;right:0;top:0;width:90px;height:90px;border-radius:50%;background:#4A3D7A"></div>' +
     '<div style="position:relative;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--gold)">Сканирование тела · 5 минут</div><div class="h-display" style="position:relative;font-size:20px;line-height:1.3">Расслабься сверху вниз</div><p style="position:relative;color:#E4DDF5">От бровей и щёк до кончиков пальцев ног. Шаг за шагом, в своём темпе</p><button class="btn btn-gold" style="position:relative" data-act="play" data-p="scan">Начать</button></div>' +
-    '<div class="label">Ещё практики</div><div class="list">' + pr.map(p => '<button class="entry" style="align-items:center" data-act="play" data-p="' + p[0] + '"><div style="flex:none;width:44px;height:44px;border-radius:14px;background:' + p[5] + ';color:' + p[6] + ';display:flex;align-items:center;justify-content:center;font-family:Unbounded,sans-serif;font-size:13px;font-weight:700">' + p[1] + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">' + p[2] + '</div><div class="small">' + p[3] + '</div></div><div class="small" style="flex:none;font-weight:700">' + p[4] + '</div></button>').join('') + '</div>' +
-    '<div class="pad small" style="padding-top:14px">Голос в сканировании — Таисия Штеменко, психолог. Фон из поющих чаш, колокольчиков и дождевой палки можно выключить кнопками вверху практики</div>';
+    '<div class="label">Ещё практики</div><div class="list">' + pr.map(p => '<button class="entry" style="align-items:center" data-act="play" data-p="' + p[0] + '"><div style="flex:none;width:44px;height:44px;border-radius:14px;background:' + p[5] + ';color:' + p[6] + ';display:flex;align-items:center;justify-content:center;font-family:Unbounded,sans-serif;font-size:13px;font-weight:700">' + p[1] + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">' + p[2] + '</div><div class="small">' + p[3] + '</div></div><div class="small" style="flex:none;font-weight:700">' + p[4] + '</div></button>').join('') + '</div>';
 }
 
 /* ---------- deck ---------- */
@@ -476,10 +560,13 @@ const A = {
     S.log.push({ date: today, id: t.id, c: t.c, l: t.l, wk: sc === 'week', a: o.r.a, g: o.r.g, j: o.r.j });
     if (alb.trim() && t.ins) S.ins.push({ id: uid(), sec: t.ins, text: alb.trim(), date: today });
     o.saved = true; if (sc === 'day') UI.justSaved = true; save();
-    if (sc === 'week') { refreshSheet('week', weekSheet()); toast(alb.trim() ? 'Камушек в копилке, пункт в инструкции' : 'Камушек в копилке'); } else { render(); window.scrollTo(0, 0); if (alb.trim()) toast('Записано в инструкцию к себе'); }
+    if (sc === 'week') { refreshSheet('week', weekSheet()); setTimeout(checkQuests, 300); toast(alb.trim() ? 'Камушек в копилке, пункт в инструкции' : 'Камушек в копилке'); } else { render(); window.scrollTo(0, 0); if (alb.trim()) toast('Записано в инструкцию к себе'); }
   },
   openWeek: () => openSheet(weekSheet(), 'week'),
   closeSheet: () => { closeSheet(); render(); },
+  questCard: () => { const c = $('#dayCard'); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (!S.day.flipped) A.flip(); } else window.scrollTo({ top: 0, behavior: 'smooth' }); },
+  questCalm: () => go('calm'),
+  openJar: () => { closeSheet(); location.hash = 'opora'; setTimeout(() => openSheet(pastSheet(), 'past'), 150); },
   levelUp: () => { S.levelAsked = S.level; S.level = Math.min(4, S.level + 1); save(); render(); toast('Новые задания добавлены в колоду'); },
   levelStay: () => { S.levelAsked = S.level; save(); render(); },
   openSec: el => { UI.insOpen = el.dataset.id; openSheet(secSheet(el.dataset.id), 'sec'); },
@@ -672,11 +759,14 @@ const Player = {
     this.el.addEventListener('click', e => { const b = e.target.closest('[data-p]'); if (b) { e.stopPropagation(); this[b.dataset.p](b); } });
     this.el.addEventListener('input', e => { if (e.target.id === 'volR') { S.calm.vol = Number(e.target.value); Ambient.setVolume(S.calm.vol); save(); } });
   },
+  markDone() { const k = todayKey(); if (!S.calmDays[k]) { S.calmDays = { [k]: true }; save(); } },
   close() {
     clearInterval(this.timer); this.timer = null;
+    const wasDone = this.finished;
     if (this.audio) { this.audio.pause(); }
     Ambient.stop();
     if (this.el) this.el.remove(); this.el = null; document.body.style.overflow = '';
+    if (wasDone) setTimeout(checkQuests, 300);
   },
   toggleVoice() { S.calm.voice = !S.calm.voice; save(); if (!S.calm.voice && this.audio) this.audio.pause(); this.drawTop(); },
   toggleBg() { S.calm.bg = !S.calm.bg; save(); if (S.calm.bg) Ambient.start(S.calm.vol); else Ambient.stop(); this.drawTop(); },
@@ -724,6 +814,7 @@ const Player = {
   label() { const st = this.steps(); return this.type === 'scan' || this.type === 'ground' ? (this.step + 1) + ' из ' + st.length : this.type === 'breath' ? 'Дыхание 4·6' : 'Ладонь на сердце'; },
   draw() {
     const st = this.steps(), s = st[this.step], fin = this.finished;
+    if (fin) this.markDone();
     let mid = '';
     if (this.type === 'breath') {
       mid = '<div class="orb" aria-hidden="true"><div class="o1" id="borb" style="transform:scale(.62)"></div><div class="zone" id="bzone">' + (fin ? 'Готово' : 'Вдох') + '</div></div><div class="say">' + (fin ? 'Две минуты спокойного дыхания. Заметь, как ты сейчас' : 'Вдыхай, пока круг растёт, и медленно выдыхай, пока он сжимается') + '</div>';
