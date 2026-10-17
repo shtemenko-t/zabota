@@ -173,7 +173,7 @@ function ratingPanel(scope, r, t) {
   const rows = defs.map(d => '<div class="rate-row"><div class="nm">' + d[1] + '</div><div class="dots">' + [1, 2, 3, 4, 5].map(n => '<button class="dot" style="border-color:' + d[2] + ';background:' + (r[d[0]] >= n ? d[3] : '#fff') + '" aria-label="' + d[1] + ': ' + n + ' из 5" data-act="rate" data-scope="' + scope + '" data-k="' + d[0] + '" data-n="' + n + '"></button>').join('') + '</div></div>').join('');
   const sec = t.ins && SECTIONS.find(x => x.id === t.ins);
   const alb = sec ? '<label class="field-label" for="alb-' + scope + '">В инструкцию к себе · ' + esc(sec.title) + '</label><input type="text" id="alb-' + scope + '" placeholder="' + esc(sec.prompts[0]) + '" maxlength="140">' : '';
-  return '<h3>Как это было?</h3>' + rows + '<label class="field-label" for="note-' + scope + '">Что заметила? <span style="font-weight:500;color:var(--muted)">необязательно</span></label><textarea id="note-' + scope + '" rows="2" maxlength="300"></textarea>' + alb +
+  return '<h3>Как это было?</h3>' + '<label class="field-label" for="note-' + scope + '">Твой ответ: что ты сделала и как это было</label><div class="small" style="margin-top:-6px">Он ляжет в копилку и всплывёт, когда станет тревожно</div><textarea id="note-' + scope + '" rows="3" maxlength="400" placeholder="Например: выбрала фильм сама, сначала было неловко, потом очень уютно"></textarea>' + alb + '<div class="field-label" style="margin-top:4px">Что ты чувствовала</div>' + rows +
     '<button class="btn btn-night" data-act="saveTask" data-scope="' + scope + '">Положить в копилку опоры</button>';
 }
 function vToday() {
@@ -296,6 +296,22 @@ function stoneMeta(s) {
   const c = s.cat === 'own' ? OWN : CATS[s.cat];
   return { label: s.wk ? 'Карта недели' : (c ? c.name : 'Задание'), when: fmtShort(s.date), dot: c ? c.dot : '#C83E62' };
 }
+function memoBody(m) {
+  if (m.kind === 'task' && m.note) return '<div class="h-display" style="font-size:18px;font-weight:500;line-height:1.4">' + esc(m.note) + '</div><div style="font-size:13px;color:#CFC6E6;line-height:1.4">Это ты в ответ на задание «' + esc(m.text) + '»</div>';
+  if (m.kind === 'task') return '<div style="font-size:13px;color:#CFC6E6">Ты сделала это для себя:</div><div class="h-display" style="font-size:18px;font-weight:500;line-height:1.4">' + esc(m.text) + '</div>';
+  return '<div class="h-display" style="font-size:18px;font-weight:500;line-height:1.4">' + esc(m.text) + '</div>';
+}
+function helps() {
+  const a = S.ins.filter(i => i.sec === 'anxiety');
+  if (!a.length) return '';
+  const x = a[Math.floor(Math.random() * a.length)];
+  return '<div style="background:rgba(255,255,255,.08);border-radius:14px;padding:10px 12px;font-size:14px;line-height:1.45"><span style="color:var(--gold);font-weight:700">Тебе помогает:</span> ' + esc(x.text) + '</div>';
+}
+function memoPool() {
+  const all = S.stones.filter(s => s.kind !== 'first');
+  const rich = all.filter(s => s.kind === 'past' || s.note);
+  return rich.length ? rich : all;
+}
 function vOpora() {
   const n = S.stones.length;
   const f = UI.oporaFilter;
@@ -306,7 +322,7 @@ function vOpora() {
     const m = UI.memo;
     h += '<div class="panel night" style="margin:0;padding:22px;border-radius:24px">' +
       (m.empty ? '<div class="small" style="color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:12px">Давай найдём опору сейчас</div><div style="font-size:16px;line-height:1.5">Сделай выдох длиннее вдоха, четыре раза. Потом назови три вещи, которые ты сегодня уже сделала для себя. Даже «поела» и «встала» считаются</div>'
-        : '<div class="small" style="color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:12px">Помнишь? · ' + esc(m.when) + '</div><div class="h-display" style="font-size:18px;font-weight:500;line-height:1.4">' + esc(m.text) + '</div><div style="font-size:14px;color:#CFC6E6">Опора уже есть. Ты сама её собрала</div>') +
+        : '<div class="small" style="color:var(--gold);font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:12px">Помнишь? · ' + esc(m.when) + '</div>' + memoBody(m) + helps() + '<div style="font-size:14px;color:#CFC6E6">Опора уже есть. Ты сама её собрала</div>') +
       '<div class="row">' + (m.empty ? '<a class="btn btn-gold" href="#calm" style="font-size:15px;min-height:46px">Успокоиться</a>' : '<button class="btn btn-gold" style="font-size:15px;min-height:46px" data-act="memoNext">Ещё одну</button>') + '<button class="btn btn-ghost-dark" style="min-height:46px" data-act="memoClose">Мне легче</button></div></div>';
   } else {
     h += '<div class="row"><button class="btn btn-rose" style="min-height:60px;border-radius:20px;font-size:17px" data-act="anxious">' + ICON.heart + 'Мне тревожно</button><button class="btn btn-ghost" style="flex:none;width:60px;min-height:60px;border-radius:20px;border-color:var(--night);padding:0" aria-label="Добавить камушек из прошлого" data-act="addPast">' + ICON.plus + '</button></div>';
@@ -319,7 +335,7 @@ function vOpora() {
   const list = S.stones.filter(s => f === 'all' || (f === 'past' ? (s.kind === 'past' || s.kind === 'first') : s.kind === 'task')).slice().reverse();
   h += '<div class="list">' + list.map(s => {
     const m = stoneMeta(s);
-    return '<button class="entry" data-act="stoneItem" data-id="' + s.id + '"><div class="d" style="background:' + m.dot + (m.ring ? ';box-shadow:0 0 0 3px #FBEFCB' : '') + '"></div><div style="min-width:0"><div class="tx">' + esc(s.text) + '</div>' + (s.note ? '<div class="small" style="margin-top:3px;color:var(--soft)">' + esc(s.note) + '</div>' : '') + '<div class="mt">' + esc(m.when) + ' · ' + esc(m.label) + '</div></div></button>';
+    return '<button class="entry" data-act="stoneItem" data-id="' + s.id + '"><div class="d" style="background:' + m.dot + (m.ring ? ';box-shadow:0 0 0 3px #FBEFCB' : '') + '"></div><div style="min-width:0">' + (s.kind === 'task' && s.note ? '<div class="tx">' + esc(s.note) + '</div><div class="small" style="margin-top:3px">Задание: ' + esc(s.text) + '</div>' : '<div class="tx">' + esc(s.text) + '</div>' + (s.kind === 'task' ? '<div class="small" style="margin-top:3px">Ответа нет — нажми, чтобы дописать</div>' : '')) + '<div class="mt">' + esc(m.when) + ' · ' + esc(m.label) + '</div></div></button>';
   }).join('') + '</div>';
   if (!list.length && n > 1) h += '<div class="pad small" style="padding-top:10px">Здесь пока пусто</div>';
   return h;
@@ -456,7 +472,7 @@ const A = {
     const note = ($('#note-' + sc) || {}).value || '';
     const alb = ($('#alb-' + sc) || {}).value || '';
     const today = todayKey();
-    S.stones.push({ id: uid(), kind: 'task', text: t.t, note: note.trim(), date: today, cat: t.c, wk: sc === 'week' });
+    S.stones.push({ id: uid(), kind: 'task', text: t.t, note: (note.trim() || alb.trim()), date: today, cat: t.c, wk: sc === 'week' });
     S.log.push({ date: today, id: t.id, c: t.c, l: t.l, wk: sc === 'week', a: o.r.a, g: o.r.g, j: o.r.j });
     if (alb.trim() && t.ins) S.ins.push({ id: uid(), sec: t.ins, text: alb.trim(), date: today });
     o.saved = true; if (sc === 'day') UI.justSaved = true; save();
@@ -482,14 +498,14 @@ const A = {
   },
   oporaFilter: el => { UI.oporaFilter = el.dataset.f; render(); },
   anxious: () => {
-    const pool = S.stones.filter(s => s.kind !== 'first');
+    const pool = memoPool();
     UI.memo = pool.length ? Object.assign({}, pool[Math.floor(Math.random() * pool.length)]) : { empty: true };
     if (!UI.memo.empty) UI.memo.when = stoneMeta(UI.memo).when;
     render();
   },
   memoNext: () => {
-    const pool = S.stones.filter(s => s.kind !== 'first');
-    if (pool.length > 1) { let m; do { m = pool[Math.floor(Math.random() * pool.length)]; } while (m.text === UI.memo.text); UI.memo = Object.assign({}, m, { when: stoneMeta(m).when }); }
+    const pool = memoPool();
+    if (pool.length > 1) { let m; do { m = pool[Math.floor(Math.random() * pool.length)]; } while (m.id === UI.memo.id); UI.memo = Object.assign({}, m, { when: stoneMeta(m).when }); }
     render();
   },
   memoClose: () => { UI.memo = null; render(); },
@@ -504,8 +520,10 @@ const A = {
   stoneItem: el => {
     const s = S.stones.find(x => x.id === el.dataset.id); if (!s) return;
     const m = stoneMeta(s);
-    openSheet('<div class="grab"></div><div class="small" style="font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:12px">' + esc(m.when) + ' · ' + esc(m.label) + '</div><h2>' + esc(s.text) + '</h2>' + (s.note ? '<p style="margin:0;color:var(--soft);line-height:1.5">' + esc(s.note) + '</p>' : '') + '<div class="row"><button class="btn btn-ghost" data-act="closeSheet">Закрыть</button>' + (s.kind === 'first' ? '' : '<button class="btn btn-line-rose" data-act="delStone" data-id="' + s.id + '">Удалить</button>') + '</div>', 'stone');
+    const edit = s.kind === 'task' ? '<label class="field-label" for="stoneNote">Твой ответ: что ты сделала и как это было</label><textarea id="stoneNote" rows="3" maxlength="400" placeholder="Допиши, если хочется">' + esc(s.note || '') + '</textarea><button class="btn btn-night" data-act="saveStoneNote" data-id="' + s.id + '">Сохранить ответ</button>' : '';
+    openSheet('<div class="grab"></div><div class="small" style="font-weight:800;letter-spacing:.06em;text-transform:uppercase;font-size:12px">' + esc(m.when) + ' · ' + esc(m.label) + '</div><h2>' + esc(s.text) + '</h2>' + edit + '<div class="row"><button class="btn btn-ghost" data-act="closeSheet">Закрыть</button>' + (s.kind === 'first' ? '' : '<button class="btn btn-line-rose" data-act="delStone" data-id="' + s.id + '">Удалить</button>') + '</div>', 'stone');
   },
+  saveStoneNote: el => { const s = S.stones.find(x => x.id === el.dataset.id); if (!s) return; s.note = $('#stoneNote').value.trim(); save(); closeSheet(); render(); toast('Ответ сохранён'); },
   delStone: el => { S.stones = S.stones.filter(x => x.id !== el.dataset.id); save(); closeSheet(); render(); },
   month: el => { UI.monthOff = Math.min(0, UI.monthOff + Number(el.dataset.d)); render(); },
   level: el => { S.level = Number(el.dataset.n); S.levelAsked = 0; save(); render(); },
