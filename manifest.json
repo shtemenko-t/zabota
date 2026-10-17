@@ -1,0 +1,16 @@
+{
+  "name": "Тренажёр заботы о себе",
+  "short_name": "Забота",
+  "description": "Каждый день маленький шаг в свою сторону",
+  "lang": "ru",
+  "start_url": "./#today",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F4EFF8",
+  "theme_color": "#F4EFF8",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
