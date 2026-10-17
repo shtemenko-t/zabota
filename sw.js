@@ -1,6 +1,6 @@
-const CACHE = 'zabota-v2';
+const CACHE = 'zabota-v3';
 const AUDIO = Array.from({ length: 13 }, (_, i) => 'audio/' + String(i + 1).padStart(2, '0') + '.m4a');
-const SHELL = ['./', 'index.html', 'style.css?v=2', 'data.js?v=2', 'app.js?v=2', 'manifest.json', 'icons/icon-192.png', 'icons/apple-touch-icon.png'].concat(AUDIO);
+const SHELL = ['./', 'index.html', 'style.css?v=3', 'data.js?v=3', 'app.js?v=3', 'manifest.json', 'icons/icon-192.png', 'icons/apple-touch-icon.png'].concat(AUDIO);
 
 // Safari plays audio with byte-range requests, so cached audio is sliced into 206 responses
 async function audioResponse(req) {

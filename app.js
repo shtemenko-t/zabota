@@ -187,6 +187,8 @@ function vToday() {
     h += '<div class="panel sage"><h3 style="color:var(--sage-ink)">Похоже, ты готова к следующему шагу</h3><p>На уровне «' + LEVELS[S.level - 1].title + '» уже ' + atLevel + ' ' + plural(atLevel, 'задание', 'задания', 'заданий') + '. Добавить в колоду задания уровня «' + LEVELS[S.level].title + '»?</p><div class="row"><button class="btn btn-night" style="min-height:46px;font-size:15px" data-act="levelUp">Добавить</button><button class="btn btn-ghost" style="min-height:46px" data-act="levelStay">Пока останусь</button></div></div>';
   }
 
+  if (S.day.saved) return h + doneBlock(t, wt);
+
   h += '<div class="card-wrap">';
   if (S.day.status === 'skipped') {
     h += '<div class="card-static" style="background:var(--lilac)"><div class="h-display" style="font-size:20px;line-height:1.3">Не сегодня — тоже выбор</div><div style="font-size:16px;line-height:1.5;color:var(--soft)">Ты прислушалась к себе, и это уже забота. Завтра будет новая карта</div><button class="btn btn-ghost" style="align-self:flex-start;min-height:44px;border-color:var(--lilac-ink);color:var(--lilac-ink);background:transparent" data-act="unskip">Вернуть карту</button></div>';
@@ -200,7 +202,6 @@ function vToday() {
       '<div style="display:flex;justify-content:space-between;align-items:center"><button class="link-btn" data-act="skip">Не сегодня</button><a class="pill-link" href="#calm">' + ICON.wave + 'Тревожно? Успокоиться</a></div></div>';
   }
   if (S.day.status === 'done' && !S.day.saved) h += '<div class="panel">' + ratingPanel('day', S.day.r, t) + '</div>';
-  if (S.day.saved) h += '<div class="panel sage"><h3>Записано в копилку</h3><p style="color:#2F6B4B">Сегодня ты была на своей стороне. Перечитай это, когда станет тревожно</p></div>';
 
   if (!(S.day.status === 'done' && !S.day.saved)) {
     const wdone = S.week.saved;
@@ -209,6 +210,27 @@ function vToday() {
   return h;
 }
 function plural(n, a, b, c) { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? a : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? b : c; }
+
+/* after the day card is saved: celebration + what's next */
+function doneBlock(t, wt) {
+  const n = S.stones.length;
+  const drop = UI.justSaved; UI.justSaved = false;
+  const c = catOf(t);
+  let h = '<div class="celebrate' + (drop ? ' drop' : '') + '"><div class="jar-wrap">' + jarSVG(n, 110) + '<span class="falling" aria-hidden="true"></span></div>' +
+    '<div class="h-display" style="font-size:22px;line-height:1.25;text-align:center">Камушек в копилке</div>' +
+    '<div class="sub" style="text-align:center;max-width:300px">Сегодня ты была на своей стороне. Это уже ' + n + '-й камушек в твоей копилке</div>' +
+    '<div class="today-card"><span class="d" style="background:' + c.dot + '"></span><span>' + esc(t.t) + '</span></div></div>';
+  h += '<div class="label">Что дальше</div><div class="list">';
+  if (!S.week.saved) {
+    h += '<button class="entry next" data-act="openWeek"><div class="ic" style="background:#2E2453;color:#F2C66D">' + ICON.star + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">Карта недели</div><div class="small">' + esc(wt.t) + '</div></div><span class="chev" aria-hidden="true">›</span></button>';
+  } else {
+    h += '<div class="entry next" style="opacity:.75"><div class="ic" style="background:var(--sage);color:var(--sage-ink)">✓</div><div style="flex:1"><div class="tx" style="font-weight:800">Карта недели выполнена</div><div class="small">Новая придёт в понедельник</div></div></div>';
+  }
+  h += '<button class="entry next" data-act="addAlbum"><div class="ic" style="background:#E7DEF6;color:#4B3A7A">' + catIcon('know', 22) + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">Находка в альбом себя</div><div class="small">Что ты сегодня узнала о себе: вкус, желание, «оказывается, я люблю…»</div></div><span class="chev" aria-hidden="true">›</span></button>';
+  h += '<a class="entry next" href="#calm" style="text-decoration:none;color:inherit"><div class="ic" style="background:#DDEFE4;color:#1F5139">' + ICON.wave + '</div><div style="flex:1;min-width:0"><div class="tx" style="font-weight:800">Пять минут покоя</div><div class="small">Сканирование тела твоим темпом, под поющие чаши</div></div><span class="chev" aria-hidden="true">›</span></a>';
+  h += '</div><div class="pad small" style="text-align:center;padding-top:18px;font-size:14px">Новая карта дня откроется завтра утром</div>';
+  return h;
+}
 
 /* ---------- week sheet ---------- */
 function weekSheet() {
@@ -424,9 +446,8 @@ const A = {
     S.stones.push({ id: uid(), kind: 'task', text: t.t, note: note.trim(), date: today, cat: t.c, wk: sc === 'week' });
     S.log.push({ date: today, id: t.id, c: t.c, l: t.l, wk: sc === 'week', a: o.r.a, g: o.r.g, j: o.r.j });
     if (alb.trim()) S.album.push({ id: uid(), type: t.alb || 'other', text: alb.trim(), date: today });
-    o.saved = true; save();
-    if (sc === 'week') refreshSheet('week', weekSheet()); else render();
-    toast(alb.trim() ? 'Камушек в копилке, находка в альбоме' : 'Камушек в копилке');
+    o.saved = true; if (sc === 'day') UI.justSaved = true; save();
+    if (sc === 'week') { refreshSheet('week', weekSheet()); toast(alb.trim() ? 'Камушек в копилке, находка в альбоме' : 'Камушек в копилке'); } else { render(); window.scrollTo(0, 0); if (alb.trim()) toast('Находка в альбоме'); }
   },
   openWeek: () => openSheet(weekSheet(), 'week'),
   closeSheet: () => { closeSheet(); render(); },
@@ -438,7 +459,7 @@ const A = {
   saveAlbum: () => {
     const text = $('#albText').value.trim(); if (!text) { $('#albText').focus(); return; }
     const k = ($('#albTypes .chip.on') || {}).dataset.k || 'other';
-    S.album.push({ id: uid(), type: k, text, date: todayKey() }); save(); closeSheet(); render(); toast('Находка в альбоме');
+    S.album.push({ id: uid(), type: k, text, date: todayKey() }); save(); closeSheet(); render(); toast('Находка в альбоме себя');
   },
   albumItem: el => {
     const a = S.album.find(x => x.id === el.dataset.id); if (!a) return;
